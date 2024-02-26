@@ -17,11 +17,13 @@ jobs:
     # See: https://circleci.com/docs/jobs-steps/#steps-overview & https://circleci.com/docs/configuration-reference/#steps
     steps:
       # Checkout the code as the first step.
+      
       - checkout
       - run:
           name: "Say hello"
           command: "echo Hello, World!"
-
+      -store_test_results:
+        path: junit.xml
 # Orchestrate jobs using workflows
 # See: https://circleci.com/docs/workflows/ & https://circleci.com/docs/configuration-reference/#workflows
 workflows:
