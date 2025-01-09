@@ -15,8 +15,8 @@ jobs:
           command: ./node_modules/.bin/ng test --watch=false --browsers=ChromeHeadless
       - store_test_results:
           path: test-results
-      #- store_artifacts:
-       #   path: test-results        
+      - store_artifacts:
+          path: test-results        
 
 workflows:
   version: 2
