@@ -27,7 +27,7 @@ jobs:
           path: test-results
       - store_artifacts:
           path: test-results/
-          destination: python_app
+          destination: app
 
 workflows:
   run-tests:
