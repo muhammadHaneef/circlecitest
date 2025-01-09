@@ -21,7 +21,7 @@ jobs:
       - run:
           name: "Say hello"
           command: "echo Hello, World"
-      -store_test_results:
+      - store_test_results:
         path: junit.xml
 
 # Orchestrate jobs using workflows
