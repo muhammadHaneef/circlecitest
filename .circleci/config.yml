@@ -19,9 +19,8 @@ jobs:
       # Checkout the code as the first step.
       - checkout
       - run:
-          #name: "Say hello"
-          name: Run tests
-          command: "echo Hello, World"
+          name: "Say hello"
+          command: Run tests
           
       #- store_test_results:
        # path: junit.xml
