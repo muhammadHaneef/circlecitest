@@ -18,9 +18,12 @@ jobs:
     steps:
       # Checkout the code as the first step.
       - checkout
+      
       - run:
-          name: "Say hello"
-          command: Run tests
+          name: Run tests
+          command: python -m pytest
+          #name: "Say hello"
+          #command: "echo Hello, World"
           
       #- store_test_results:
        # path: junit.xml
