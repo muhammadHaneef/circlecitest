@@ -21,6 +21,7 @@ jobs:
       - run:
           name: "Say hello"
           command: "echo Hello, World"
+          name: Run tests
       #- store_test_results:
        # path: junit.xml
       
