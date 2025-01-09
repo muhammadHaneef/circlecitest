@@ -20,10 +20,11 @@ jobs:
       - checkout
       
       - run:
-          name: Run tests
-          command: pytest --junitxml=testreports/junit.xml
-          #name: "Say hello"
-          #command: "echo Hello, World"
+          name: run tests
+          command: |
+            . venv/bin/activate
+            mkdir test-results
+            pytest --junitxml=test-results/junit.xml tests
           
       #- store_test_results:
        # path: junit.xml
