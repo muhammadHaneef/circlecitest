@@ -21,7 +21,7 @@ jobs:
       
       - run:
           name: Run tests
-          command: run -m tests
+          command: pytest --junitxml=testreports/junit.xml
           #name: "Say hello"
           #command: "echo Hello, World"
           
