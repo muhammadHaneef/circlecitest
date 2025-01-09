@@ -21,9 +21,10 @@ jobs:
       - run:
           name: "Say hello"
           command: "echo Hello, World"
+                    mkdir /tmp/testreports;
       #- store_test_results:
        # path: junit.xml
-       mkdir /tmp/testreports;
+      
       - store_test_results:
           path: testreports
 
