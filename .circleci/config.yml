@@ -23,6 +23,7 @@ jobs:
           command: "echo Hello, World"
       #- store_test_results:
        # path: junit.xml
+       mkdir /tmp/testreports;
       - store_test_results:
           path: testreports
 
