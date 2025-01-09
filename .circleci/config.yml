@@ -21,7 +21,7 @@ jobs:
       
       - run:
           name: Run tests
-          command: python -m tests/
+          command: python -m APITestCase
           #name: "Say hello"
           #command: "echo Hello, World"
           
