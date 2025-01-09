@@ -24,7 +24,7 @@ jobs:
       #- store_test_results:
        # path: junit.xml
        - store_test_results:
-            path: /testreports
+            path: testreports
 
 # Orchestrate jobs using workflows
 # See: https://circleci.com/docs/workflows/ & https://circleci.com/docs/configuration-reference/#workflows
