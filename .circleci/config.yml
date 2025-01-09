@@ -23,7 +23,7 @@ jobs:
           name: run tests
           command: |
             #mkdir testreports
-            py.test -vv tests/
+            pytest -vv tests/
             #pytest --junitxml=test-results/junit.xml tests
           
       #- store_test_results:
