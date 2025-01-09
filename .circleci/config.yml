@@ -20,16 +20,16 @@ jobs:
       - checkout
       
       - run:
-          #name: Run tests
-          #command: python -m tests
-          name: "Say hello"
-          command: "echo Hello, World"
+          name: Run tests
+          command: python -m tests
+          #name: "Say hello"
+          #command: "echo Hello, World"
           
       #- store_test_results:
        # path: junit.xml
       
       - store_test_results:
-          path: junit.xml
+          path: testreports
 
 # Orchestrate jobs using workflows
 # See: https://circleci.com/docs/workflows/ & https://circleci.com/docs/configuration-reference/#workflows
