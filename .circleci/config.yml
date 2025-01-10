@@ -53,6 +53,8 @@ jobs:
       - run: yarn test
       - store_artifacts:
           path: ./output
+      - store_test_results:
+         path: ./output    
 
   yarn_test_parallel:
     executor: linux
