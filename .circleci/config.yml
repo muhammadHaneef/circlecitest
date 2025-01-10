@@ -64,6 +64,8 @@ jobs:
       - run: yarn test-run-multiple
       - store_artifacts:
           path: ./output
+      - store_test_results:
+          path: ./output    
 workflows:
   run_tests:
     jobs:
