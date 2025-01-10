@@ -16,8 +16,8 @@ jobs:
       - store_test_results:
           path: test
           #path: test-results
-      - store_artifacts:
-           path: test-results
+      #- store_artifacts:
+       #    path: test-results
           #path: test-results        
 
 workflows:
