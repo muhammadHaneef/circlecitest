@@ -1,82 +1,90 @@
 version: 2.1
 
-#########
-# Common
-#########
-orbs:
-  heroku: circleci/heroku@1.0.1
-
-############
-# Workflows
-############
-workflows:
-  version: 2
-  build-deploy:
-    jobs:
-      - build
-      - deploy:
-          requires:
-            - build
-          filters:
-            branches:
-              only: master
-
-##################
-# Job Definitions
-##################
 jobs:
   build:
     docker:
-      - image: circleci/python:3.6.2-stretch-browsers
-        environment:
-          FLASK_CONFIG: testing
-          TEST_DATABASE_URL: postgresql://ubuntu@localhost/circle_test?sslmode=disable
-      - image: circleci/postgres:9.6.5-alpine-ram
-        environment:
-          POSTGRES_USER: ubuntu
-          POSTGRES_DB: circle_test
-          POSTGRES_PASSWORD: ''
+      - image: cimg/node:current
     steps:
       - checkout
-      - run: mkdir test-reports
-      - run:
-          name: Download Selenium
-          command: |
-            curl -O http://selenium-release.storage.googleapis.com/3.5/selenium-server-standalone-3.5.3.jar
-      - run:
-          name: Start Selenium
-          command: |
-            java -jar selenium-server-standalone-3.5.3.jar -log test-reports/selenium.log
-          background: true
+
+      # Restore previous node package cache if there is one
       - restore_cache:
-          key: deps2-{{ checksum "requirements/dev.txt" }}
-      - run:
-          command: |
-            python3 -m venv venv
-            . venv/bin/activate
-            pip install -r requirements/dev.txt
+          key: node-{{ checksum "package-lock.json" }}
+
+      # Skip this line if not installing your own Node.js packages
+      - run: npm ci
+
+      # Save cache
       - save_cache:
-          key: deps2-{{ checksum "requirements/dev.txt" }}
+          key: node-{{ checksum "package-lock.json" }}
           paths:
-            - 'venv'
+            - ~/.npm
+
+      # Store project files for the next job
+      - persist_to_workspace:
+          root: ~/
+          paths:
+            - project
+
+  test:
+    docker:
+      - image: cimg/node:current
+
+    steps:
+      # Start with the initial build
+      - attach_workspace:
+          at: ~/
+
+      # Install Testmo CLI tool
+      - run: npm install --no-save @testmo/testmo-cli
+
+      # Optionally add a couple of fields such as the git hash and link to the build
       - run:
           command: |
-            . venv/bin/activate
-            python manage.py test
+            npx testmo automation:resources:add-field --name git --type string \
+              --value ${CIRCLE_SHA1:0:7} --resources resources.json
+            npx testmo automation:resources:add-link --name build \
+              --url $CIRCLE_BUILD_URL --resources resources.json
+
+      # Check if the required variables are available
+      - run:
+          command: |
+            if [[ -z "${TESTMO_URL}" ]]; then
+              echo "The TESTMO_URL secret is not defined for this project"
+              exit 1
+            fi
+
+            if [[ -z "${TESTMO_TOKEN}" ]]; then
+              echo "The TESTMO_TOKEN secret is not defined for this project"
+              exit 1
+            fi
+
+      # Run tests and report results to Testmo
+      - run:
+          command: |
+            npx testmo automation:run:submit \
+              --instance "$TESTMO_URL" \
+              --project-id 1 \
+              --name "Mocha test run" \
+              --source "unit-tests" \
+              --resources resources.json \
+              --results results/*.xml \
+              -- npm run mocha-junit # Note space after --
+
+      # Store test artifacts and results
       - store_artifacts:
-          path: test-reports/
-          destination: tr1
+          path: results
+          destination: test_results
       - store_test_results:
-          path: test-reports/
+          path: results
 
-  deploy:
-    executor: heroku/default
-    steps:
-      - checkout
-      - add_ssh_keys:
-          fingerprints:
-            - '48:a0:87:54:ca:75:32:12:c6:9e:a2:77:a4:7a:08:a4'
-      - heroku/install
-      - heroku/deploy-via-git:
-          force: true
-
+workflows:
+  version: 2
+  full:
+    jobs:
+      - build
+      - test:
+          requires:
+            - build
+          context:
+            - testmo
