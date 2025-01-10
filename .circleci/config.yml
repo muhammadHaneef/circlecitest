@@ -1,91 +1,26 @@
+# config file by yaseen
 version: 2.1
-
 jobs:
-  build:
+  run-tests:
     docker:
-      - image: cimg/node:current
+      - image: circleci/node:16-browsers
     steps:
       - checkout
-
-      # Restore previous node package cache if there is one
-      - restore_cache:
-          key: node-{{ checksum "package-lock.json" }}
-
-      # Skip this line if not installing your own Node.js packages
-      - run: npm ci
-
-      # Save cache
-      - save_cache:
-          key: node-{{ checksum "package-lock.json" }}
-          paths:
-            - ~/.npm
-
-      # Store project files for the next job
-      - persist_to_workspace:
-          root: ~/
-          paths:
-            - project
-
-  test:
-    docker:
-      - image: cimg/node:current
-
-    steps:
-      # Start with the initial build
-      - attach_workspace:
-          at: ~/
-
-      # Install Testmo CLI tool
-      - run: npm install --no-save @testmo/testmo-cli
-
-      # Optionally add a couple of fields such as the git hash and link to the build
       - run:
-          command: |
-            npx testmo automation:resources:add-field --name git --type string \
-              --value ${CIRCLE_SHA1:0:7} --resources resources.json
-            npx testmo automation:resources:add-link --name build \
-              --url $CIRCLE_BUILD_URL --resources resources.json
-
-      # Check if the required variables are available
+          name: Install Dependencies
+          command: npm install
       - run:
-          command: |
-            if [[ -z "${TESTMO_URL}" ]]; then
-              echo "The TESTMO_URL secret is not defined for this project"
-              exit 1
-            fi
-
-            if [[ -z "${TESTMO_TOKEN}" ]]; then
-              echo "The TESTMO_TOKEN secret is not defined for this project"
-              exit 1
-            fi
-
-      # Run tests and report results to Testmo
-      - run:
-          command: |
-            npx testmo automation:run:submit \
-              --instance "$TESTMO_URL" \
-              --project-id 1 \
-              --name "Mocha test run" \
-              --source "unit-tests" \
-              --resources resources.json \
-              --results results/*.xml \
-              -- npm run mocha-junit # Note space after --
-
-      # Store test artifacts and results
-      - store_artifacts:
-          path: results1
-          destination: test_results
+          name: Run Unit Tests
+          command: ./node_modules/.bin/ng test --watch=false --browsers=ChromeHeadless
       - store_test_results:
-          path: results1
-          
+          path: test-results
+          destination: test-results
+      #- store_artifacts:
+       #    path: test-results
+          #path: test-results        
 
 workflows:
   version: 2
-  full:
+  test:
     jobs:
-      - build
-      - test:
-          requires:
-            - build
-          context:
-            - testmo
+      - run-tests
