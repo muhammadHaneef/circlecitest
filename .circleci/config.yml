@@ -51,10 +51,9 @@ jobs:
           at: ./
       - run: npx puppeteer browsers install chrome
       - run: yarn test
-      - store_artifacts:
-          path: ./output
       - store_test_results:
-         path: ./tests    
+          path: ./output
+      
 
   yarn_test_parallel:
     executor: linux
@@ -64,10 +63,9 @@ jobs:
           at: ./
       - run: npx puppeteer browsers install chrome
       - run: yarn test-run-multiple
-      - store_artifacts:
-          path: ./output
       - store_test_results:
-          path: ./tests    
+          path: ./output
+     
 workflows:
   run_tests:
     jobs:
