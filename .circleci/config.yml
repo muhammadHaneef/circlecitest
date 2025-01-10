@@ -54,7 +54,7 @@ jobs:
       - store_artifacts:
           path: ./output
       - store_test_results:
-         path: ./output    
+         path: output    
 
   yarn_test_parallel:
     executor: linux
@@ -67,7 +67,7 @@ jobs:
       - store_artifacts:
           path: ./output
       - store_test_results:
-          path: ./output    
+          path: output    
 workflows:
   run_tests:
     jobs:
