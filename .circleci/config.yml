@@ -1,26 +1,79 @@
-# config file by yaseen
-version: 2.1
-jobs:
-  run-tests:
-    docker:
-      - image: circleci/node:16-browsers
-    steps:
-      - checkout
-      - run:
-          name: Install Dependencies
-          command: npm install
-      - run:
-          name: Run Unit Tests
-          command: ./node_modules/.bin/ng test --watch=false --browsers=ChromeHeadless
-      - store_test_results:
-          path: test-results
-          destination: test-results
-      #- store_artifacts:
-       #    path: test-results
-          #path: test-results        
 
+version: 2.1
+
+orbs:
+  node: circleci/node@6.1.0
+
+executors:
+  linux:
+    docker:
+      - image: 'codeceptjs/codeceptjs'
+
+commands:
+  install_dependencies:
+    steps:
+      - upgrade_node
+      - checkout
+      - node/install-packages:
+          pkg-manager: yarn
+  upgrade_node:
+    steps:
+      - run: node --version
+      - run: apt-get update && apt-get install -y curl
+      - run: curl --version
+      - node/install:
+          node-version: '22.9'
+      - run: node --version
+
+jobs:
+  setup:
+    executor: linux
+    steps:
+      - install_dependencies
+      - persist_to_workspace:
+          root: ./
+          paths:
+            - ./*
+
+  yarn_lint:
+    executor: linux
+    steps:
+      - upgrade_node
+      - attach_workspace:
+          at: ./
+      - run: yarn lint
+
+  yarn_test:
+    executor: linux
+    steps:
+      - upgrade_node
+      - attach_workspace:
+          at: ./
+      - run: npx puppeteer browsers install chrome
+      - run: yarn test
+      - store_artifacts:
+          path: ./output
+
+  yarn_test_parallel:
+    executor: linux
+    steps:
+      - upgrade_node
+      - attach_workspace:
+          at: ./
+      - run: npx puppeteer browsers install chrome
+      - run: yarn test-run-multiple
+      - store_artifacts:
+          path: ./output
 workflows:
-  version: 2
-  test:
+  run_tests:
     jobs:
-      - run-tests
+      - setup
+      - yarn_lint:
+          requires:
+            - setup
+      - yarn_test:
+          requires:
+            - setup
+      - yarn_test_parallel:
+          requires:
+            - setup
