@@ -1,0 +1,62 @@
+version: "3"
+
+tasks:
+  lint:
+    desc: Lint code
+    cmds:
+      - golangci-lint run -c .golangci.yml
+    summary: Lint the project with golangci-lint
+
+  clean:
+    desc: Cleans out the build, out, docs, and dist directories
+    cmds:
+      - GO111MODULE=off go clean -i
+      - rm -rf build out docs dist
+
+  fmt:
+    desc: Run `go fmt` to format the code
+    cmds:
+      - go fmt ./...
+
+  test:
+    desc: Run the tests
+    cmds:
+      - go test -v ./...
+
+  tidy:
+    desc: Run 'go mod tidy' to clean up module files.
+    cmds:
+      - go mod tidy -v
+
+  doc:
+    desc: run's the godocs
+    cmds:
+      - godoc -http=:6060
+
+  check-go-mod:
+    desc: Check go.mod is tidy
+    cmds:
+      - go mod tidy -v
+      - git diff --exit-code -- go.mod go.sum
+
+  vendor:
+    desc: go mod vendor
+    cmds:
+      - go mod vendor
+
+  build:
+    desc: Build main
+    cmds:
+      # LDFlags sets the segment endpoint to an empty string thus letting the analytics library set the default endpoint on its own
+      # Not setting the `SegmentEndpoint` variable would let the value in the code ie "http://localhost"
+      - go build -v -o build/$(go env GOOS)/$(go env GOARCH)/circleci -ldflags='-X github.com/CircleCI-Public/circleci-cli/telemetry.SegmentEndpoint=https://api.segment.io' .
+
+  build-linux:
+    desc: Build main
+    cmds:
+      - go build -v -o build/linux/amd64/circleci .
+
+  cover:
+    desc: tests and generates a cover profile
+    cmds:
+      - go test -race -coverprofile=coverage.txt ./...
