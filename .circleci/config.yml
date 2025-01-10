@@ -73,10 +73,10 @@ jobs:
 
       # Store test artifacts and results
       - store_artifacts:
-          path: results
+          path: results1
           destination: test_results
       - store_test_results:
-          path: results
+          path: results1
           
 
 workflows:
