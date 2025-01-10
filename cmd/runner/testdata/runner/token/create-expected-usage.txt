@@ -1,2 +1,0 @@
-Usage:
-  runner token create <resource-class> <nickname>

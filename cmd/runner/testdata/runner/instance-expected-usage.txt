@@ -1,7 +1,0 @@
-Usage:
-  runner instance [command]
-
-Available Commands:
-  list        List runner instances
-
-Use "runner instance [command] --help" for more information about a command.

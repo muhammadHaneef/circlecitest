@@ -1,8 +1,0 @@
-Usage:
-  runner resource-class delete <resource-class> [flags]
-
-Aliases:
-  delete, rm
-
-Flags:
-  -f, --force   Delete resource-class and any associated tokens

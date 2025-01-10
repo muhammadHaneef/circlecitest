@@ -1,199 +1,240 @@
-# circleci-cli
+CircleCI Demo Android
+=================
+[![CircleCI](https://circleci.com/gh/tadashi0713/circleci-demo-android/tree/master.svg?style=svg)](https://circleci.com/gh/tadashi0713/circleci-demo-android/tree/master)
 
-This is CircleCI's command-line application.
+Demo for CI/CD pipeline for Android Native app using CircleCI.
 
-[Documentation](https://circleci-public.github.io/circleci-cli) |
-[Code of Conduct](./CODE_OF_CONDUCT.md) |
-[Contribution Guidelines](./CONTRIBUTING.md) |
-[Hacking](./HACKING.md)
+Forked from [Sunflower App](https://github.com/android/sunflower).
 
-[![CircleCI](https://circleci.com/gh/CircleCI-Public/circleci-cli.svg?style=shield)](https://circleci.com/gh/CircleCI-Public/circleci-cli)
-[![GitHub release](https://img.shields.io/github/tag/CircleCI-Public/circleci-cli.svg?label=latest)](https://github.com/CircleCI-Public/circleci-cli/releases)
-[![GoDoc](https://img.shields.io/badge/godoc-reference-blue.svg)](https://godoc.org/github.com/CircleCI-Public/circleci-cli)
-[![License](https://img.shields.io/badge/license-MIT-red.svg)](./LICENSE)
+You can see [config file here](https://github.com/tadashi0713/circleci-demo-android/blob/master/.circleci/config.yml).
 
-## Getting Started
+* Use [Android Orb](https://circleci.com/developer/ja/orbs/orb/circleci/android) to 
+  * Set [Android Machine Executor](https://circleci.com/docs/2.0/android-machine-image/)
+  * Run [Espresso tests with Android Emulator](https://circleci.com/docs/2.0/android-machine-image/) easily
+  * Save & restore Gradle cache easily
+* Use [Ruby Orb](https://circleci.com/developer/ja/orbs/orb/circleci/ruby) to install Fastlane with cache easily.
+  * Fastlane is used to upload app to [Firebase App Distribution](https://firebase.google.com/docs/app-distribution)
+* [Custom resource class](https://circleci.com/docs/ja/2.0/configuration-reference/#resourceclass) to optimise build speed
+  * You can see how much resource(CPU and RAM) is used in each jobs in UI page(Available Docker Executors)
 
-### Installation
+![](./screenshots/cpu_usage.png)
 
-CircleCI CLI is available on the following package managers:
+* Use [Context](https://circleci.com/docs/2.0/contexts/) for storing secrets(this time token for Firebase) for across projects.
+* Upload test results & visualize in [Test Insights](https://circleci.com/docs/2.0/insights-tests/).
 
-#### Homebrew
+Test splitting and parallelism of Android UITests(Espresso) using Android Emulators on CircleCI
+---------------
 
-```
-brew install circleci
-```
+This demo includes UITests(Espresso), which need to be run on either Android devices or emulators.
 
-#### Snap
+I added sleep(`Thread.sleep()`) on purpose randomly to make each tests execution time sparsely.
 
-```
-sudo snap install circleci
-```
+```kt
+class GardenActivity3Test {
+    @Test fun clickAddPlant_OpensPlantList() {
+        // When the "Add Plant" button is clicked
+        onView(withId(R.id.add_plant)).perform(click())
 
-#### Chocolatey
+        Thread.sleep(30000)
 
-```
-choco install circleci-cli -y
-```
-
-### Install script
-
-You can also install the CLI binary by running our install script on most Unix platforms:
-
-```
-curl -fLSs https://raw.githubusercontent.com/CircleCI-Public/circleci-cli/main/install.sh | bash
-```
-
-By default, the `circleci` app will be installed to the ``/usr/local/bin`` directory. If you do not have write permissions to `/usr/local/bin`, you may need to run the above command with `sudo`:
-
-```
-curl -fLSs https://raw.githubusercontent.com/CircleCI-Public/circleci-cli/main/install.sh | sudo bash
+        // Then the ViewPager should change to the Plant List page
+        onView(withId(R.id.plant_list)).check(matches(isDisplayed()))
+    }
+}
 ```
 
-Alternatively, you can install to an alternate location by defining the `DESTDIR` environment variable when invoking `bash`:
+If you just want to run these Espresso tests on Android Emulators, you can easily create CircleCI pipeline using [Android Orb](https://circleci.com/developer/orbs/orb/circleci/android).
 
+```yml
+integration_test:
+  executor:
+    name: android/android-machine
+    resource-class: xlarge
+    tag: 2022.09.1
+  steps:
+    - checkout
+    - android/start-emulator-and-run-tests
+    - store_test_results:
+        path: ./app/build/outputs/androidTest-results/connected
 ```
-curl -fLSs https://raw.githubusercontent.com/CircleCI-Public/circleci-cli/main/install.sh | DESTDIR=/opt/bin bash
+
+`android/start-emulator-and-run-tests` includes following steps:
+* Create & launch Android Emulator
+* Restore Gradle cache
+* Build for testing(`./gradlew assembleDebugAndroidTest`)
+* Wait for Android Emulator to start
+* Run tests(`./gradlew connectedDebugAndroidTest`)
+
+However, since UITests takes time, you want to split these tests and run them in multiple Android emulators.
+
+To run these tests in parallel using CircleCI, follow these steps:
+* Pre-build (assembleAndroidTest) to run Espresso tests
+* Launch multiple Linux VMs/Android emulators
+* Split tests based on execution time
+* Run split tests in parallel
+* Upload test results which include execution time
+
+### Pre-build (assembleAndroidTest)
+
+All Android application tests, including UI tests, must be built before running.
+
+`build_for_integration_test` job pre-build using `./gradlew assembleDebugAndroidTest` command in order to run the tests in parallel on multiple Android emulators later on.
+
+```yml
+build_for_integration_test:
+  executor:
+    name: android/android-machine
+    resource-class: xlarge
+    tag: 2022.09.1
+  steps:
+    - checkout
+    - android/restore-gradle-cache
+    - run: ./gradlew assembleDebugAndroidTest
+    - android/save-gradle-cache
+    - persist_to_workspace:
+        root: ~/
+        paths: .
 ```
 
-You can also set a specific version of the CLI to install with the `VERSION` environment variable:
+### Test splitting and parallelism of UITests(Espresso)
 
+`integration_test_parallel` splits UITests(Espresso) and runs in parallel.
+
+```yml
+integration_test_parallel:
+  parallelism: 6
+  executor:
+    name: android/android-machine
+    resource-class: xlarge
+    tag: 2022.09.1
+  steps:
+    - checkout
+    - attach_workspace:
+        at: ~/
+    - run:
+        name: Split Espresso tests
+        command: |
+          cd app/src/androidTest/java
+          CLASSNAMES=$(circleci tests glob "**/*Test.kt" \
+            | sed 's@/@.@g' \
+            | sed 's/.kt//' \
+            | circleci tests split --split-by=timings --timings-type=classname)
+          echo "export GRADLE_ARGS='-Pandroid.testInstrumentationRunnerArguments.class=$(echo $CLASSNAMES | sed -z "s/\n//g; s/ /,/g")'" >> $BASH_ENV
+    - android/create-avd:
+        avd-name: test
+        install: true
+        system-image: "system-images;android-29;default;x86"
+    - android/start-emulator:
+        avd-name: test
+        post-emulator-launch-assemble-command: ""
+    - run:
+        name: Run Espresso tests
+        command: ./gradlew connectedDebugAndroidTest $GRADLE_ARGS
+    - store_test_results:
+        path: ./app/build/outputs/androidTest-results/connected
 ```
-curl -fLSs https://raw.githubusercontent.com/CircleCI-Public/circleci-cli/main/install.sh | sudo VERSION=0.1.5222 bash
+
+If you want to run specific UITests(Espresso), you need to add following Gradle args.
+
+```shell
+./gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.google.samples.apps.sunflower.GardenActivity1Test,com.google.samples.apps.sunflower.GardenActivity2Test
 ```
 
-Take note that additional environment variables should be passed between sudo and invoking bash.
+Therefore, below script glob test files, process to classname, and process to Gradle args.
 
-#### Checksum verification
-
-If you would like to verify the checksum yourself, you can download the checksum file from the [GitHub releases page](https://github.com/CircleCI-Public/circleci-cli/releases) and verify the checksum of the archive using the `circleci-cli_<version>_checksums.txt` inside the assets of the release you'd like to install:
-
-On macOS and Linux:
 ```sh
-shasum -a 256 circleci-cli_<version>_<os>.tar.gz
+cd app/src/androidTest/java
+CLASSNAMES=$(circleci tests glob "**/*Test.kt" \
+  | sed 's@/@.@g' \
+  | sed 's/.kt//' \
+  | circleci tests split --split-by=timings --timings-type=classname)
+echo "export GRADLE_ARGS='-Pandroid.testInstrumentationRunnerArguments.class=$(echo $CLASSNAMES | sed -z "s/\n//g; s/ /,/g")'" >> $BASH_ENV
 ```
 
-and on Windows:
-```powershell
-Get-FileHash .\circleci-cli_<version>_<os>.tar.gz -Algorithm SHA256 | Format-List
-```
+After launch Android emulators, we will add this Gradle args.
 
-And compare it to the right checksum depending on the downloaded version in the `circleci-cli_<version>_checksums.txt` file.
+`post-emulator-launch-assemble-command` can be blank since we already pre-build in previous job.
 
-### Updating
+### Result
 
-If you installed the CLI without a package manager, you can use its built-in update command to check for pending updates and download them:
+![](https://user-images.githubusercontent.com/8651308/204975115-41b42495-e037-4070-bf68-34c5f1b85957.png)
+![](https://user-images.githubusercontent.com/8651308/204975245-765b325c-8206-44b0-a621-247419f1c701.png)
 
-```
-circleci update check
-circleci update install
-```
+Getting Started
+---------------
+This project uses the Gradle build system. To build this project, use the
+`gradlew build` command or use "Import Project" in Android Studio.
 
-## Configure the CLI
+There are two Gradle tasks for testing the project:
+* `connectedAndroidTest` - for running Espresso on a connected device
+* `test` - for running unit tests
 
-After installing the CLI, you must run setup to configure the tool.
+### Unsplash API key
 
-```
-$ circleci setup
-```
+Sunflower uses the [Unsplash API](https://unsplash.com/developers) to load pictures on the gallery
+screen. To use the API, you will need to obtain a free developer API key. See the
+[Unsplash API Documentation](https://unsplash.com/documentation) for instructions.
 
-You should be prompted to enter the _CircleCI API Token_ you generated from the [Personal API Token tab](https://circleci.com/account/api)
-
-
-```
-✔ CircleCI API Token:
-
-API token has been set.
-
-✔ CircleCI Host: https://circleci.com
-
-CircleCI host has been set.
-
-Setup complete. Your configuration has been saved.
-```
-
-If you are using this tool on `circleci.com`, accept the provided default `CircleCI Host`.
-
-Server users will have to change the default value to your custom address (e.g., `circleci.my-org.com`).
-
-**Note**: Server does not yet support config processing and orbs, you will only be able to use `circleci local execute` (previously `circleci build`) for now.
-
-
-## Validate A Build Config
-
-To ensure that the tool is installed, you can use it to validate a build config file.
+Once you have the key, add this line to the `gradle.properties` file, either in your user home
+directory (usually `~/.gradle/gradle.properties` on Linux and Mac) or in the project's root folder:
 
 ```
-$ circleci config validate
-
-Config file at .circleci/config.yml is valid
+unsplash_access_key=<your Unsplash access key>
 ```
 
+The app is still usable without an API key, though you won't be able to navigate to the gallery screen.
 
-## Docker
+Screenshots
+-----------
 
-The CLI may also be used without installation by using Docker.
+![List of plants](screenshots/phone_plant_list.png "A list of plants")
+![Plant details](screenshots/phone_plant_detail.png "Details for a specific plant")
+![My Garden](screenshots/phone_my_garden.png "Plants that have been added to your garden")
 
-```
-docker run --rm -v $(pwd):/data -w /data circleci/circleci-cli:alpine config validate /data/.circleci/config.yml --token $TOKEN
-```
+Libraries Used
+--------------
+* [Foundation][0] - Components for core system capabilities, Kotlin extensions and support for
+  multidex and automated testing.
+  * [AppCompat][1] - Degrade gracefully on older versions of Android.
+  * [Android KTX][2] - Write more concise, idiomatic Kotlin code.
+  * [Test][4] - An Android testing framework for unit and runtime UI tests.
+* [Architecture][10] - A collection of libraries that help you design robust, testable, and
+  maintainable apps. Start with classes for managing your UI component lifecycle and handling data
+  persistence.
+  * [Data Binding][11] - Declaratively bind observable data to UI elements.
+  * [Lifecycles][12] - Create a UI that automatically responds to lifecycle events.
+  * [LiveData][13] - Build data objects that notify views when the underlying database changes.
+  * [Navigation][14] - Handle everything needed for in-app navigation.
+  * [Room][16] - Access your app's SQLite database with in-app objects and compile-time checks.
+  * [ViewModel][17] - Store UI-related data that isn't destroyed on app rotations. Easily schedule
+     asynchronous tasks for optimal execution.
+  * [WorkManager][18] - Manage your Android background jobs.
+* [UI][30] - Details on why and how to use UI Components in your apps - together or separate
+  * [Animations & Transitions][31] - Move widgets and transition between screens.
+  * [Fragment][34] - A basic unit of composable UI.
+  * [Layout][35] - Lay out widgets using different algorithms.
+* Third party and miscellaneous libraries
+  * [Glide][90] for image loading
+  * [Hilt][92]: for [dependency injection][93]
+  * [Kotlin Coroutines][91] for managing background threads with simplified code and reducing needs for callbacks
 
-## circleci-agent
-
-In order to maintain backwards compatibility with the `circleci` binary present in builds, some commands are proxied to a program called `circleci-agent`.
-
-This program must exist in your `$PATH` as is the case inside of a job.
-
-The following commands are affected:
-
-* `circleci tests split`
-* `circleci step halt`
-* `circleci config migrate`
-
-## Platforms, Deployment and Package Managers
-
-The tool is deployed through a number of channels. The primary release channel is through [GitHub Releases](https://github.com/CircleCI-Public/circleci-cli/releases). Green builds on the `main` branch will publish a new GitHub release. These releases contain binaries for macOS, Linux and Windows. These releases are published from (CircleCI)[https://app.circleci.com/pipelines/github/CircleCI-Public/circleci-cli] using [GoReleaser](https://goreleaser.com/).
-
-### Homebrew
-
-We publish the tool to [Homebrew](https://brew.sh/). The tool is [part of `homebrew-core`](https://github.com/Homebrew/homebrew-core/blob/main/Formula/circleci.rb), and therefore the maintainers of the tool are obligated to follow the guidelines for acceptable Homebrew formulae. You should [familiarize yourself with the guidelines](https://docs.brew.sh/Acceptable-Formulae#we-dont-like-tools-that-upgrade-themselves) before making changes to the Homebrew deployment system.
-
-The particular considerations that we make are:
-
-
-1. Since Homebrew [doesn't "like tools that upgrade themselves"](https://docs.brew.sh/Acceptable-Formulae#we-dont-like-tools-that-upgrade-themselves), we disable the `circleci update` command when the tool is released through homebrew. We do this by [defining the PackageManager](https://github.com/Homebrew/homebrew-core/blob/eb1fdb84e2924289bcc8c85ee45081bf83dc024d/Formula/circleci.rb#L28) constant to `homebrew`, which allows us to [disable the `update` command at runtime](https://github.com/CircleCI-Public/circleci-cli/blob/67c7d52bace63846f87a1ed79f67f257c94a55b4/cmd/root.go#L119-L123).
-1. We want to avoid every push to `main` from creating a Pull Request to the `circleci` formula on Homebrew. We want to avoid overloading the Homebrew team with pull requests to update our formula for small changes (changes to docs or other files that don't change functionality in the tool).
-
-### Snap
-
-We publish Linux builds of the tool to the Snap package manager.
-
-Further [package information is available on Snap website](https://snapcraft.io/circleci).
-
-## Contributing
-
-Development instructions for the CircleCI CLI can be found in [HACKING.md](HACKING.md).
-
-## More
-
-Please see the [documentation](https://circleci-public.github.io/circleci-cli) or `circleci help` for more.
-
-## Server compatibility
-
-| Functionality | Impacted commands | Change description | Compatibility with Server |
-| --- | --- | --- | --- |
-| Config compilation and validation | <ul><li>`circleci config validate`</li><li>`circleci config process`</li><li>`circleci local execute`</li> | The config validation has been moved from the GraphQL API to a specific API endpoint | <ul><li>**Server v4.0.5, v4.1.3, v4.2.0 and above**: Commands use the new specific endpoint</li><li>**Previous version**: Commands use the GraphQL API</li></ul> |
-| Orb compilation and validation of orb using private orbs | <ul><li>`circleci orb process`</li><li>`circleci orb validate`</li></ul> | To support the validation of orbs requesting private orbs (see [issue](https://github.com/CircleCI-Public/circleci-cli/issues/751)). A field `ownerId` has been added to the GraphQL orb validation endpoint. Thus allowing the `Impacted commands` to use the `--org-id` parameter to enable the orb compilation / validation  | <ul><li>**Server v4.2.0 and above**: The field is accessible so you can use the parameter</li><li>**Previous versions**: The field does not exist making the functionality unavailable</li></ul> |
-
-## Telemetry
-
-The CircleCI CLI includes a telemetry feature that collects basic errors and feature usage data in order to help us improve the experience for everyone.
-
-Telemetry works on an opt-in basis: when running a command for the first time, you will be asked for consent to enable telemetry. For non-TTY STDIN, telemetry is disabled by default, ensuring that scripts that use the CLI run smoothly.
-
-You can disable or enable telemetry anytime in one of the following ways:
-
-* Run the commands `circleci telemetry enable` or `circleci telemetry disable`
-
-* Set the `CIRCLECI_CLI_TELEMETRY_OPTOUT` environment variable to `1` or `true` to disable it
-
+[0]: https://developer.android.com/jetpack/components
+[1]: https://developer.android.com/topic/libraries/support-library/packages#v7-appcompat
+[2]: https://developer.android.com/kotlin/ktx
+[4]: https://developer.android.com/training/testing/
+[10]: https://developer.android.com/jetpack/arch/
+[11]: https://developer.android.com/topic/libraries/data-binding/
+[12]: https://developer.android.com/topic/libraries/architecture/lifecycle
+[13]: https://developer.android.com/topic/libraries/architecture/livedata
+[14]: https://developer.android.com/topic/libraries/architecture/navigation/
+[16]: https://developer.android.com/topic/libraries/architecture/room
+[17]: https://developer.android.com/topic/libraries/architecture/viewmodel
+[18]: https://developer.android.com/topic/libraries/architecture/workmanager
+[30]: https://developer.android.com/guide/topics/ui
+[31]: https://developer.android.com/training/animation/
+[34]: https://developer.android.com/guide/components/fragments
+[35]: https://developer.android.com/guide/topics/ui/declaring-layout
+[90]: https://bumptech.github.io/glide/
+[91]: https://kotlinlang.org/docs/reference/coroutines-overview.html
+[92]: https://developer.android.com/training/dependency-injection/hilt-android
+[93]: https://developer.android.com/training/dependency-injection

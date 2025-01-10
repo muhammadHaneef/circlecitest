@@ -1,5 +1,0 @@
-Usage:
-  runner token delete <token-id>
-
-Aliases:
-  delete, rm
