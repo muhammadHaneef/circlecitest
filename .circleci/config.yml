@@ -1,26 +1,82 @@
-# config file by yaseen
 version: 2.1
-jobs:
-  run-tests:
-    docker:
-      - image: circleci/node:16-browsers
-    steps:
-      - checkout
-      - run:
-          name: Install Dependencies
-          command: npm install
-      - run:
-          name: Run Unit Tests
-          command: ./node_modules/.bin/ng test --watch=false --browsers=ChromeHeadless
-      - store_test_results:
-          path: test-results
-          destination: test-results
-      #- store_artifacts:
-       #    path: test-results
-          #path: test-results        
 
+#########
+# Common
+#########
+orbs:
+  heroku: circleci/heroku@1.0.1
+
+############
+# Workflows
+############
 workflows:
   version: 2
-  test:
+  build-deploy:
     jobs:
-      - run-tests
+      - build
+      - deploy:
+          requires:
+            - build
+          filters:
+            branches:
+              only: master
+
+##################
+# Job Definitions
+##################
+jobs:
+  build:
+    docker:
+      - image: circleci/python:3.6.2-stretch-browsers
+        environment:
+          FLASK_CONFIG: testing
+          TEST_DATABASE_URL: postgresql://ubuntu@localhost/circle_test?sslmode=disable
+      - image: circleci/postgres:9.6.5-alpine-ram
+        environment:
+          POSTGRES_USER: ubuntu
+          POSTGRES_DB: circle_test
+          POSTGRES_PASSWORD: ''
+    steps:
+      - checkout
+      - run: mkdir test-reports
+      - run:
+          name: Download Selenium
+          command: |
+            curl -O http://selenium-release.storage.googleapis.com/3.5/selenium-server-standalone-3.5.3.jar
+      - run:
+          name: Start Selenium
+          command: |
+            java -jar selenium-server-standalone-3.5.3.jar -log test-reports/selenium.log
+          background: true
+      - restore_cache:
+          key: deps2-{{ checksum "requirements/dev.txt" }}
+      - run:
+          command: |
+            python3 -m venv venv
+            . venv/bin/activate
+            pip install -r requirements/dev.txt
+      - save_cache:
+          key: deps2-{{ checksum "requirements/dev.txt" }}
+          paths:
+            - 'venv'
+      - run:
+          command: |
+            . venv/bin/activate
+            python manage.py test
+      - store_artifacts:
+          path: test-reports/
+          destination: tr1
+      - store_test_results:
+          path: test-reports/
+
+  deploy:
+    executor: heroku/default
+    steps:
+      - checkout
+      - add_ssh_keys:
+          fingerprints:
+            - '48:a0:87:54:ca:75:32:12:c6:9e:a2:77:a4:7a:08:a4'
+      - heroku/install
+      - heroku/deploy-via-git:
+          force: true
+
